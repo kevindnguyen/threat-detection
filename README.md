@@ -55,5 +55,3 @@ A personal collection of custom Microsoft Sentinel analytics rules and KQL queri
 Licensed under the [MIT License](LICENSE). Free to use, modify, and distribute — attribution appreciated but not required.
 
 ---
-
-*Built with ❤️ and too many late-night threat hunts.*
