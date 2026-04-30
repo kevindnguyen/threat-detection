@@ -1,0 +1,91 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/da66837c-d914-4779-a16b-42efc1f7276b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/da66837c-d914-4779-a16b-42efc1f7276b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Enterprise Application Management Activity Detected",
+                "description": "This rule detects activity in the `AuditLogs` table where `Category == \"ApplicationManagement\"`, indicating a change was made to an application registration, enterprise application, service principal, or associated permissions within Microsoft Entra ID. These actions are commonly abused to establish persistence, escalate privileges, or maintain long-term tenant access.\n\n**When this alert fires, an analyst should:**\n\n- **Validate the initiating identity** — Confirm the identity in `InitiatedBy` is authorized to perform application management tasks. Extract the associated IP address and verify it against known corporate ranges, VPN egress points, or named locations in Entra ID. Flag actions originating from anonymizing infrastructure, hosting providers, or unexpected geographies.\n\n- **Review the operation** — Examine `OperationName` for high-risk actions such as `Add application credentials`, `Add delegated permission grant`, `Add app role assignment to service principal`, or `Add owner to application`.\n\n- **Identify the affected application** — Check `TargetResources` to confirm the application is known and that the change aligns with its expected function or development lifecycle.\n\n- **Correlate related activity** — Use `CorrelationId` to pivot to related events. Cross-reference `SigninLogs` for recent authentication by the initiating identity and look for concurrent `RoleManagement` or `UserManagement` events suggesting a broader attack chain.\n\n- **Confirm authorization** — If the change cannot be tied to an approved ticket, deployment pipeline, or known change window, escalate to the application owner or identity governance team.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "AuditLogs\n| where \n    Category == \"ApplicationManagement\"\n| extend \n    InitiatedBy = parse_json(InitiatedBy)\n| extend \n    userPrincipalName = InitiatedBy.user.userPrincipalName\n| extend \n    ipAddress = InitiatedBy.user.ipAddress\n| extend \n    TargetResources = parse_json(TargetResources)\n| extend \n    displayName = TargetResources.[0].displayName\n| mv-expand TargetResources.[0].modifiedProperties\n| extend modifiedProperty = TargetResources_0_modifiedProperties.displayName\n| extend modifiedProperty_old = TargetResources_0_modifiedProperties.oldValue\n| extend modifiedProperty_new = TargetResources_0_modifiedProperties.newValue\n| extend Application = displayName\n| extend bag = bag_pack(\"modifiedProperty\", modifiedProperty, \"old\", modifiedProperty_old, \"new\", modifiedProperty_new)\n| project TimeGenerated, userPrincipalName, ipAddress, Application, ActivityDisplayName, bag",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "PT4H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "userPrincipalName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ipAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Application"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": [
+                    {
+                        "columnName": "ActivityDisplayName"
+                    },
+                    {
+                        "columnName": "bag"
+                    }
+                ],
+                "templateVersion": null
+            }
+        }
+    ]
+}

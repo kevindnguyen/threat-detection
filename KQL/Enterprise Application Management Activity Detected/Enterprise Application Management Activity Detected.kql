@@ -1,0 +1,20 @@
+AuditLogs
+| where 
+    Category == "ApplicationManagement"
+| extend 
+    InitiatedBy = parse_json(InitiatedBy)
+| extend 
+    userPrincipalName = InitiatedBy.user.userPrincipalName
+| extend 
+    ipAddress = InitiatedBy.user.ipAddress
+| extend 
+    TargetResources = parse_json(TargetResources)
+| extend 
+    displayName = TargetResources.[0].displayName
+| mv-expand TargetResources.[0].modifiedProperties
+| extend modifiedProperty = TargetResources_0_modifiedProperties.displayName
+| extend modifiedProperty_old = TargetResources_0_modifiedProperties.oldValue
+| extend modifiedProperty_new = TargetResources_0_modifiedProperties.newValue
+| extend Application = displayName
+| extend bag = bag_pack("modifiedProperty", modifiedProperty, "old", modifiedProperty_old, "new", modifiedProperty_new)
+| project TimeGenerated, userPrincipalName, ipAddress, Application, ActivityDisplayName, bag
