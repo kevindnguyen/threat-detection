@@ -1,6 +1,6 @@
 # 🛡️ Microsoft Sentinel Analytics Rules
 
-A personal collection of custom Microsoft Sentinel analytics rules and KQL queries — built from real-world detection engineering experience. Each rule is ready to use and available in two formats for flexibility.
+A personal collection of custom Microsoft Sentinel analytics rules and KQL queries — built from real-world detection engineering experience.
 
 ---
 
@@ -8,104 +8,51 @@ A personal collection of custom Microsoft Sentinel analytics rules and KQL queri
 
 ```
 /
-├── Helpful Queries/
-│   └── Determine Mean Time to Detect for Analytics Rules.kql
-│
-├── IOC Queries/
-│   ├── Chrysalis Backdoor Notepad++ Rapid7 IOC Threat Hunt.kql
-│   └── readme.md
-│
-├── KQL/
-│   ├── Multiple Email Reports with Matching Entities/
-│   │   ├── Multiple Email Reports with Matching Entities.kql
-│   │   └── Multiple Email Reports with Matching Entities.json
-│   │
-│   ├── Sentinel Data Connector Status Anomaly Detection/
-│   │   ├── Sentinel Data Connector Status Anomaly Detection.kql
-│   │   └── Sentinel Data Connector Status Anomaly Detection.json
-│   │
-│   └── Suspicious Email Interaction with Downstream Execution IOC/
-│       ├── Suspicious Email Interaction with Downstream Execution IOC.kql
-│       └── Suspicious Email Interaction with Downstream Execution IOC.json
-│
-└── README.md
+├── Helpful Queries/       # Standalone KQL utility queries for operational insight and reporting
+├── IOC Queries/           # Threat hunting queries built around specific IOCs or threat actor TTPs
+└── KQL/                   # Full analytics rules — each subfolder contains a .kql and .json file
 ```
 
-**Helpful Queries** — standalone KQL utility queries (not analytics rules), useful for operational insight and reporting.
+### Folders
 
-**IOC Queries** — threat hunting queries built around specific IOCs or threat actor TTPs.
+**`/Helpful Queries`** — Standalone KQL queries that aren't analytics rules but are useful for day-to-day SOC operations, reporting, and Sentinel health checks.
 
-**KQL** — full analytics rules, each with a raw `.kql` file and an importable `.json` ARM template.
+**`/IOC Queries`** — Threat hunting queries tied to specific IOCs or threat actor campaigns. Run these manually in Log Analytics when investigating a specific threat.
+
+**`/KQL`** — The main analytics rules. Each subfolder contains:
+- A raw `.kql` file — paste directly into Log Analytics or Sentinel Logs
+- A `.json` ARM template — import directly into Sentinel as a Scheduled Query Rule
 
 ---
 
 ## 🚀 How to Use
 
-### Option 1 — Import the JSON (Recommended)
+### Import a rule into Sentinel (Recommended)
 
-1. In the [Azure Portal](https://portal.azure.com), navigate to your **Microsoft Sentinel** workspace.
+1. Navigate to your **Microsoft Sentinel** workspace in the [Azure Portal](https://portal.azure.com).
 2. Go to **Analytics** → **Active rules**.
-3. Click **Import** and upload the `.json` file from the rule's folder.
-4. Review the rule settings and click **Save**.
+3. Click **Import** and upload the `.json` file from the relevant folder.
+4. Review and save.
 
-### Option 2 — Run the Raw KQL
+### Run the raw KQL
 
-1. Open the `.kql` file in the rule's folder.
-2. Paste the query into **Sentinel → Logs** or the **Log Analytics query editor**.
-3. Adjust any parameters (time range, thresholds, entity mappings) to suit your environment.
-4. Optionally promote it to a new Scheduled Query Rule manually.
-
----
-
-## 📋 Rules & Queries Index
-
-### 🔵 Analytics Rules (`/KQL`)
-
-| Rule Name | Description |
-|-----------|-------------|
-| [Multiple Email Reports with Matching Entities](./KQL/Multiple%20Email%20Reports%20with%20Matching%20Entities) | Detects multiple email alert reports that share matching entities, helping surface coordinated or repeated email-based threats. |
-| [Sentinel Data Connector Status Anomaly Detection](./KQL/Sentinel%20Data%20Connector%20Status%20Anomaly%20Detection) | Identifies anomalies in data connector health and ingestion status, alerting on connectors that have stopped reporting or behaving unexpectedly. |
-| [Suspicious Email Interaction with Downstream Execution IOC](./KQL/Suspicious%20Email%20Interaction%20with%20Downstream%20Execution%20IOC) | Correlates email interaction events with downstream process or execution IOCs to detect phishing-to-execution attack chains. |
-
-### 🟡 IOC Queries (`/IOC Queries`)
-
-| Query Name | Description |
-|------------|-------------|
-| [Chrysalis Backdoor Notepad++ Rapid7 IOC Threat Hunt](./IOC%20Queries/Chrysalis%20Backdoor%20Notepad%2B%2B%20Rapid7%20IOC%20Threat%20Hunt.kql) | Threat hunting query targeting IOCs associated with the Chrysalis backdoor delivered via a malicious Notepad++ plugin, based on Rapid7 threat intelligence. |
-
-### 🟢 Helpful Queries (`/Helpful Queries`)
-
-| Query Name | Description |
-|------------|-------------|
-| [Determine Mean Time to Detect for Analytics Rules](./Helpful%20Queries/Determine%20Mean%20Time%20to%20Detect%20for%20Analytics%20Rules.kql) | Calculates the Mean Time to Detect (MTTD) across your Sentinel analytics rules, useful for measuring and reporting on SOC detection performance. |
-
----
-
-## ⚙️ Requirements
-
-- Microsoft Sentinel workspace (Log Analytics)
-- Appropriate data connectors enabled depending on the rule — check each rule's `.kql` file for the tables referenced
-- Analytics rules in `/KQL` require a Sentinel workspace with scheduled query rule creation permissions
+1. Copy the contents of the `.kql` file.
+2. Paste into **Sentinel → Logs** or your Log Analytics workspace.
+3. Tune thresholds and time windows to your environment as needed.
 
 ---
 
 ## 📌 Notes
 
-- Rules are provided **as-is** and should be tested in a non-production environment before deployment.
-- Thresholds, time windows, and entity mappings may need tuning to reduce false positives in your specific environment.
-- KQL queries use the `TimeGenerated` field and target the **Microsoft Sentinel / Log Analytics** table schema.
-
----
-
-## 🤝 Contributing
-
-This is a personal repository, but suggestions and feedback are welcome. If you spot an issue with a rule or have an improvement idea, feel free to open an Issue.
+- All rules are provided **as-is** and should be tested before deploying to production.
+- Thresholds and entity mappings may need tuning to suit your environment and reduce false positives.
+- Queries use the `TimeGenerated` field and target the standard Microsoft Sentinel / Log Analytics table schema.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and distribute these rules — attribution is appreciated but not required.
+Licensed under the [MIT License](LICENSE). Free to use, modify, and distribute — attribution appreciated but not required.
 
 ---
 
