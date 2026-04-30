@@ -1,0 +1,18 @@
+let CIDRASN = (externaldata (CIDR:string, CIDRASN:int, CIDRASNName:string) 
+    ['https://firewalliplists.gypthecat.com/lists/kusto/kusto-cidr-asn.csv.zip'] 
+    with (ignoreFirstRecord=true));
+CommonSecurityLog
+    | where 
+        tostring(DestinationPort) has_any ("44818", "102")
+    | where 
+        not(DeviceAction has_any ("deny", "error", "negotiate"))
+    | where 
+        Message != "Connection Failed"
+    | where 
+        not(Activity has_any ("traffic:local deny", "traffic:forward timeout", "traffic:forward deny"))
+    | where 
+        ipv4_is_private(SourceIP) == false
+    | project 
+        TimeGenerated, Activity, ApplicationProtocol, SourceIP
+    | evaluate 
+        ipv4_lookup(CIDRASN, SourceIP, CIDR, return_unmatched=true)
