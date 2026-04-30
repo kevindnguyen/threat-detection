@@ -39,16 +39,6 @@ Each folder represents a single analytics rule. The folder name reflects the rul
 
 ---
 
-## 📋 Rules Index
-
-| Rule Name | Description | Tactics | Severity |
-|-----------|-------------|---------|----------|
-| *(more coming soon)* | | | |
-
-> This table is updated as new rules are added.
-
----
-
 ## ⚙️ Requirements
 
 - Microsoft Sentinel workspace (Log Analytics)
