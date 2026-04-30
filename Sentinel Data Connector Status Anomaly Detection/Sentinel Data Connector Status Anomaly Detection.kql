@@ -1,0 +1,168 @@
+let LogsCount = union isfuzzy=true
+        CommonSecurityLog, 
+        AzureActivity, 
+        AzureDiagnostics, 
+        SecurityAlert, 
+        SecurityIncident, 
+        SigninLogs, 
+        OfficeActivity, 
+        DeviceNetworkEvents, 
+        DeviceFileEvents, 
+        DeviceImageLoadEvents, 
+        DeviceProcessEvents, 
+        DeviceRegistryEvents, 
+        DeviceInfo
+    // Add other relevant tables if needed
+    | where 
+        TimeGenerated >= ago(30d)
+    | extend 
+        DataConnector = case(
+                    Type == "CommonSecurityLog",
+                    "Common Event Format (CEF) via AMA",
+                    Type == "AzureActivity",
+                    "Azure Activity",
+                    Type == "AzureDiagnostics",
+                    "Azure DDoS Protection",
+                    Type == "SecurityAlert",
+                    "Microsoft Defender",
+                    Type == "SecurityIncident",
+                    "Microsoft Defender",
+                    Type == "SigninLogs",
+                    "Microsoft 365",
+                    Type == "OfficeActivity",
+                    "Microsoft 365",
+                    Type startswith "Device",
+                    "Microsoft Defender for Endpoint",
+                    "Other"
+                )
+    | where
+        isnotempty(DataConnector)
+    | make-series Count=count()
+        default=0
+        on TimeGenerated
+        from ago(30d) to ago(1h)
+        step 1h
+        by DataConnector
+    | mv-expand 
+        Count, TimeGenerated
+    | project-reorder 
+        TimeGenerated, DataConnector, Count
+    | extend 
+        TimeGenerated = todatetime(TimeGenerated)
+    | extend 
+        Count = toint(Count);
+let HourlyAverages = LogsCount
+    | extend
+        HourOfDay = datetime_part("hour", TimeGenerated)
+    | summarize 
+        HourlyAvg = avg(Count)
+        by HourOfDay, DataConnector;
+let CurrentHour = bin(now(), 1h);
+let CurrentHourOfDay = datetime_part("hour", CurrentHour);
+let AverageForCurrentHour = toscalar(HourlyAverages
+    | where
+        HourOfDay == CurrentHourOfDay
+    | project
+        HourlyAvg);
+let LastHourLogsCount = union isfuzzy=true
+        CommonSecurityLog, 
+        AzureActivity, 
+        AzureDiagnostics, 
+        SecurityAlert, 
+        SecurityIncident, 
+        SigninLogs, 
+        OfficeActivity, 
+        DeviceNetworkEvents, 
+        DeviceFileEvents, 
+        DeviceImageLoadEvents, 
+        DeviceProcessEvents, 
+        DeviceRegistryEvents, 
+        DeviceInfo
+    | where 
+        TimeGenerated >= ago(1h)
+    | extend 
+        DataConnector = case(
+                    Type == "CommonSecurityLog",
+                    "Common Event Format (CEF) via AMA",
+                    Type == "AzureActivity",
+                    "Azure Activity",
+                    Type == "AzureDiagnostics",
+                    "Azure DDoS Protection",
+                    Type == "SecurityAlert",
+                    "Microsoft Defender",
+                    Type == "SecurityIncident",
+                    "Microsoft Defender",
+                    Type == "SigninLogs",
+                    "Microsoft 365",
+                    Type == "OfficeActivity",
+                    "Microsoft 365",
+                    Type startswith "Device",
+                    "Microsoft Defender for Endpoint",
+                    "Other"
+                )
+    | where 
+        isnotempty(DataConnector)
+    | make-series Count=count()
+        default=0
+        on TimeGenerated
+        from ago(1h) to now()
+        step 1h
+        by DataConnector
+    | mv-expand 
+        Count, TimeGenerated
+    | project-reorder 
+        TimeGenerated, DataConnector, Count
+    | extend 
+        TimeGenerated = todatetime(TimeGenerated)
+    | extend 
+        Count = toint(Count);
+// CS-20974: Commenting out these variables, was causing issues with the math in the case statements below
+// let MarginOfError50 = 0.50 * AverageForCurrentHour; // 50% margin of error
+// let UpperThreshold50 = AverageForCurrentHour + MarginOfError50;
+// let LowerThreshold50 = AverageForCurrentHour - MarginOfError50;
+// let MarginOfError25 = 0.25 * AverageForCurrentHour; // 25% margin of error
+// let UpperThreshold25 = AverageForCurrentHour + MarginOfError25;
+// let LowerThreshold25 = AverageForCurrentHour - MarginOfError25;
+// let StopThreshold = 0; // Assuming logs stop when Count is zero
+LastHourLogsCount
+| extend 
+    HourOfDay = datetime_part("hour", TimeGenerated)    
+| join 
+    kind=inner (HourlyAverages)
+    on HourOfDay, DataConnector
+| extend  
+    Alert = iff(DataConnector != "Microsoft Defender",
+            case(
+                Count == 0,
+                "No Logs",
+                HourlyAvg == 0,
+                "Normal",
+                Count > (HourlyAvg * 1.5),  //+50% margin of error
+                "Critical Spike",
+                Count > (HourlyAvg * 1.25), //+25% margin of error
+                "Elevated Spike",
+                Count < (HourlyAvg * 0.5),  //-50% margin of error
+                "Critical Drop",
+                Count < (HourlyAvg * 0.75), //-25% margin of error
+                "Elevated Drop",
+                "Normal"
+                ),
+            case(
+                Count == 0,
+                "No Logs",
+                "Normal"
+                )
+            )
+| where 
+    Alert != "Normal"
+| extend
+    RuleName = "Sentinel Data Connector Anomaly Detection",
+    RuleDescription = "Detects anomalies in data connector log volumes by comparing current log counts to 30-day averages, identifying significant deviations."
+| project 
+    TimeGenerated,
+    DataConnector,
+    Count,
+    HourlyAvg,
+    Alert,
+    RuleName,
+    RuleDescription
