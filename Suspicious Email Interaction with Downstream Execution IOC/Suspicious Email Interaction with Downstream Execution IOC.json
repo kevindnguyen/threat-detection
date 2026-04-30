@@ -1,1 +1,76 @@
-
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/aba28ff1-eba0-4029-98d3-cc3cf2756e6f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/aba28ff1-eba0-4029-98d3-cc3cf2756e6f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Suspicious Email Interaction with Downstream Execution IOC",
+                "description": "This rule detects inbound emails that have failed SPF and/or DKIM authentication checks and presents evidence of post-delivery user interaction. Authentication failures on inbound email are a strong indicator of email spoofing or unauthorized sending infrastructure, commonly associated with phishing campaigns targeting organizational users.\nUnlike basic phishing detections that alert on email receipt alone, this rule correlates authentication failures with downstream activity to identify attacks that have progressed beyond the initial delivery phase of the MITRE ATT&CK kill chain.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Identify inbound emails that failed SPF or DKIM authentication checks, indicating potential spoofing or unauthorized sending infrastructure\nlet failAuthEmails = EmailEvents\n    | extend \n        AuthenticationDetails = parse_json(AuthenticationDetails)\n    | where \n        EmailDirection == \"Inbound\" and \n        (\n            AuthenticationDetails.SPF has_any (\"none\", \"fail\") or \n            AuthenticationDetails.DKIM has_any (\"none\", \"fail\", \"error\")\n            )\n    | summarize by \n        NetworkMessageId\n    ;\n// Retrieve URL click events associated with authentication-failed emails to detect potential phishing link engagement\nlet badClicks = UrlClickEvents\n    | where \n        NetworkMessageId has_any (failAuthEmails)\n    | summarize by\n        NetworkMessageId, Url\n    ;\n// Extract SHA-256 file hash indicators from the Threat Intelligence table for use in malicious attachment correlation\nlet tiHash = ThreatIntelIndicators\n    | where \n        ObservableKey == \"file:hashes.'SHA-256'\"\n    | summarize by\n        ObservableValue\n;\n// Correlate email attachments from authentication-failed emails against known malicious SHA-256 hashes in the Threat Intelligence table\nlet badAttach = EmailAttachmentInfo\n    | where \n        NetworkMessageId has_any (failAuthEmails)\n    | summarize by \n        NetworkMessageId, SHA256\n    | join \n        kind=inner tiHash on $left.SHA256 == $right.ObservableValue\n    | project-rename \n        attachNetworkMessageId=NetworkMessageId, attachSHA256=SHA256\n;\n// Detect files created on endpoints where the SHA-256 hash matches an attachment delivered via an authentication-failed email, indicating a potential payload execution\nlet badFilEvent = DeviceFileEvents\n    | where \n        ActionType == \"FileCreated\"\n    | join \n        kind=inner (\n            EmailAttachmentInfo\n                | where\n                    NetworkMessageId has_any (failAuthEmails)\n                | summarize by \n                    NetworkMessageId, SHA256\n                )\n            on $left.SHA256 == $right.SHA256\n    | project-rename \n        fileNetworkMessageId=NetworkMessageId, fileSHA256=SHA256\n;\n// Consolidate all identified indicators of compromise (IOCs) — malicious URLs, attachment hashes, and file event hashes — into a unified dataset per email\nlet badEvents = badClicks\n    | join \n        kind=fullouter badAttach on $left.NetworkMessageId == $right.attachNetworkMessageId\n    | join \n        kind=fullouter badFilEvent on $left.NetworkMessageId == $right.fileNetworkMessageId\n    | extend \n        IOC = pack_array(Url, attachSHA256, fileSHA256)\n    | mv-expand \n        IOC to typeof(string)\n    | where \n        isnotempty(IOC)\n    | project \n        NetworkMessageId, IOC\n;\n// Return full email metadata for messages with confirmed IOCs, enriched with authentication results and associated indicators for analyst review\nEmailEvents\n    | join\n        kind=inner badEvents on $left.NetworkMessageId == $right.NetworkMessageId \n    | extend \n        AuthenticationDetails = parse_json(AuthenticationDetails)\n    | project \n        TimeGenerated, \n        Subject, \n        SenderFromAddress, \n        RecipientEmailAddress, \n        AuthenticationDetails.SPF, \n        AuthenticationDetails.DKIM,\n        AuthenticationDetails.DMARC,\n        InternetMessageId,\n        NetworkMessageId,\n        IOC\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1566",
+                    "T1204"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "MailMessage",
+                        "fieldMappings": [
+                            {
+                                "identifier": "NetworkMessageId",
+                                "columnName": "NetworkMessageId"
+                            },
+                            {
+                                "identifier": "Threats",
+                                "columnName": "IOC"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
