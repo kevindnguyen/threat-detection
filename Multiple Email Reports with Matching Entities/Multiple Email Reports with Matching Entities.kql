@@ -1,0 +1,60 @@
+let threshold = 3
+;
+let reportEvents = CloudAppEvents
+    | where ActionType == "UserSubmission"
+    | extend InternetMessageId = extract("InternetMessageId\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend P1Sender = extract("P1Sender\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend P1SenderDomain = extract("P1SenderDomain\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend P2Sender = extract("P2Sender\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend P2SenderDomain = extract("P2SenderDomain\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend SenderIP = extract("SenderIP\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend Subject = extract("Subject\":\"([^\"]+)", 1, tostring(RawEventData))
+    | extend UserId = extract("UserId\":\"([^\"]+)", 1, tostring(RawEventData))
+    | project
+        TimeGenerated,
+        ReportId,
+        InternetMessageId,
+        P1Sender,
+        P1SenderDomain,
+        P2Sender,
+        P2SenderDomain,
+        SenderIP,
+        Subject,
+        UserId
+;
+let _SenderIP = reportEvents
+    | summarize Count = count_distinct(ReportId) by SenderIP
+    | where Count >= threshold
+    | project SenderIP
+;
+let _P1Sender = reportEvents
+    | summarize Count = count_distinct(ReportId) by P1Sender
+    | where Count > threshold
+    | project P1Sender
+;
+let _P1SenderDomain = reportEvents
+    | summarize Count = count_distinct(ReportId) by P1SenderDomain
+    | where Count > threshold
+    | project P1SenderDomain
+;
+let _P2Sender = reportEvents
+    | summarize Count = count_distinct(ReportId) by P2Sender
+    | where Count > threshold
+    | project P2Sender
+;
+let _P2SenderDomain = reportEvents
+    | summarize Count = count_distinct(ReportId) by P2SenderDomain
+    | where Count > threshold
+    | project P2SenderDomain
+;
+let _Subject = reportEvents
+    | summarize Count = count_distinct(ReportId) by Subject
+    | where Count > threshold
+    | project Subject;
+reportEvents
+    | where SenderIP has_any (_SenderIP) or 
+    P1Sender has_any (_P1Sender) or
+    P1SenderDomain has_any (_P1SenderDomain) or 
+    P2Sender has_any (_P2Sender) or
+    P2SenderDomain has_any (_P2SenderDomain) or 
+    Subject has_any (_Subject)
